@@ -8,17 +8,7 @@ var url = require('url');
 var request = require('request');
 var debug = require('debug')('koa-prerender-m');
 
-var requestGet = function(options) {
-  return new Promise(function(resolve, reject) {
-    request(options, function(error, response, result) {
-      // console.log(this)
-      if (error)
-        return reject(error);
-      resolve(result);
-    });
-  });
-}
-
+// 默认的爬虫agent列表
 var crawlerUserAgentsDefault = [
   'baiduspider',
   'facebookexternalhit',
@@ -33,6 +23,7 @@ var crawlerUserAgentsDefault = [
   'developers.google.com/+/web/snippet'
 ];
 
+// 默认排除的后缀名
 var extensionsToIgnoreDefault = [
   '.js',
   '.css',
@@ -82,8 +73,8 @@ var extensionsToIgnoreDefault = [
  * @return {Boolean}
  */
 function shouldPreRender(options) {
-  var extensionsToIgnore = options.extensionsToIgnore || extensionsToIgnoreDefault;
-  var crawlerUserAgents = options.crawlerUserAgents || crawlerUserAgentsDefault;
+  var extensionsToIgnore = options.extensionsToIgnore;
+  var crawlerUserAgents = options.crawlerUserAgents;
   var hasExtensionToIgnore = extensionsToIgnore.some(function(extension) {
     return options
       .url
@@ -134,6 +125,13 @@ function shouldPreRender(options) {
 module.exports = function preRenderMiddleware(options) {
   options = options || {};
   options.prerender = options.prerender;
+  options.extensionsToIgnore = options.extensionsToIgnore || extensionsToIgnoreDefault;
+  options.crawlerUserAgents = options.crawlerUserAgents || crawlerUserAgentsDefault;
+  options.redirectStatusCodes = options.redirectStatusCodes || [301, 302];
+  // options.username
+  // options.password
+  // options.protocol
+  // options.host
 
   /*
    * Pre-render
@@ -152,7 +150,9 @@ module.exports = function preRenderMiddleware(options) {
       userAgent: this.get('user-agent'),
       bufferAgent: this.get('x-bufferbot'),
       method: this.method,
-      url: this.url
+      url: this.url,
+      extensionsToIgnore: options.extensionsToIgnore,
+      crawlerUserAgents: options.crawlerUserAgents,
     });
 
     var body = '';
@@ -160,13 +160,35 @@ module.exports = function preRenderMiddleware(options) {
     var renderUrl;
     var preRenderUrl;
     var result;
+    var app = this;
+
+    var requestGet = function(args) {
+      return new Promise(function(resolve, reject) {
+        request(args, function(error, response, result) {
+          var statusCode = response.statusCode;
+
+          if (error)
+            return reject(error);
+
+          app.body = result.toString();
+          app.set('X-Prerender', 'true');
+
+          if (options.redirectStatusCodes.indexOf(statusCode) != -1 && response.headers.location) {
+            app.status = statusCode;
+            app.redirect(response.headers.location);
+          }
+
+          resolve(result);
+        });
+      });
+    }
 
     // Pre-render generate the site and return
     if (isPreRender) {
       renderUrl = protocol + '://' + host + this.url;
       preRenderUrl = options.prerender + renderUrl;
       // console.log(preRenderUrl)
-      result = yield requestGet({
+      yield requestGet({
         'auth': {
           'user': options.username,
           'pass': options.password,
@@ -175,13 +197,9 @@ module.exports = function preRenderMiddleware(options) {
         method: 'GET',
         url: preRenderUrl,
         headers: headers,
-        gzip: true
+        gzip: true,
+        followRedirect: false
       });
-      // console.log(result)
-      // yield * next;
-
-      this.body = result.toString();
-      this.set('X-Prerender', 'true');
     } else {
       yield * next;
       this.set('X-Prerender', 'false');

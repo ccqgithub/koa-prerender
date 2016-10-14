@@ -19,7 +19,8 @@ app.use(prerender({
   username: 'test',                        // basic auth username
   password: 'test',                        // basic auth password
   extensionsToIgnore: [],                  // 忽略扩展名
-  crawlerUserAgents: []                    // 适用user agents
+  crawlerUserAgents: [],                   // 适用user agents
+  redirectStatusCodes: [301, 302],         // 需要redirect的状态码（prerender server 遇到页面跳转时不会跟踪渲染，而是返回跳转的response，这里根据response的location和statusCode进行redirect）。
 }));
 ```
 
