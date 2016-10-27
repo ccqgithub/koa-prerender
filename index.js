@@ -105,7 +105,8 @@ function shouldPreRender(options) {
   var query = url
     .parse(options.url, true)
     .query;
-  if (query && query.hasOwnProperty('_escaped_fragment_')) {
+
+  if (query && Object.hasOwnProperty.call(query, "_escaped_fragment_")) {
     return true;
   }
 
