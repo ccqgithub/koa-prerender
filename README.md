@@ -4,6 +4,9 @@
 
 ## 安装配置
 
+- 1.x for koa@1.x
+- 2.x for koa@2.x
+
 安装：
 
 `npm install --save koa-prerender-m`;

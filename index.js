@@ -140,18 +140,18 @@ module.exports = function preRenderMiddleware(options) {
    * @method preRender
    * @param {Generator} next
    */
-  return function * preRender(next) {
-    var protocol = options.protocol || this.protocol;
-    var host = options.host || this.host;
+  return async function preRender(ctx, next) {
+    var protocol = options.protocol || ctx.protocol;
+    var host = options.host || ctx.host;
     var headers = {
-      'User-Agent': this.get('user-agent')
+      'User-Agent': ctx.get('user-agent')
     };
 
     var isPreRender = shouldPreRender({
-      userAgent: this.get('user-agent'),
-      bufferAgent: this.get('x-bufferbot'),
-      method: this.method,
-      url: this.url,
+      userAgent: ctx.get('user-agent'),
+      bufferAgent: ctx.get('x-bufferbot'),
+      method: ctx.method,
+      url: ctx.url,
       extensionsToIgnore: options.extensionsToIgnore,
       crawlerUserAgents: options.crawlerUserAgents,
     });
@@ -161,7 +161,7 @@ module.exports = function preRenderMiddleware(options) {
     var renderUrl;
     var preRenderUrl;
     var result;
-    var app = this;
+    var app = ctx;
 
     var requestGet = function(args) {
       return new Promise(function(resolve, reject) {
@@ -186,10 +186,10 @@ module.exports = function preRenderMiddleware(options) {
 
     // Pre-render generate the site and return
     if (isPreRender) {
-      renderUrl = protocol + '://' + host + this.url;
+      renderUrl = protocol + '://' + host + ctx.url;
       preRenderUrl = options.prerender + renderUrl;
       // console.log(preRenderUrl)
-      yield requestGet({
+      await requestGet({
         'auth': {
           'user': options.username,
           'pass': options.password,
@@ -202,8 +202,8 @@ module.exports = function preRenderMiddleware(options) {
         followRedirect: false
       });
     } else {
-      yield * next;
-      this.set('X-Prerender', 'false');
+      await next();
+      ctx.set('X-Prerender', 'false');
     }
   };
 };
