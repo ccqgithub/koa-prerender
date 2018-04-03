@@ -4,13 +4,23 @@
  * @author Peter Marton, Gergely Nemeth
  */
 
-var url = require('url');
-var request = require('request');
-var debug = require('debug')('koa-prerender-m');
+const url = require('url');
+const request = require('request');
+const debug = require('debug')('koa-prerender-m');
 
 // 默认的爬虫agent列表
-var crawlerUserAgentsDefault = [
+const crawlerUserAgentsDefault = [
   'baiduspider',
+  'iaskspider',
+  'sogou web spider',
+  'sogou push spider',
+  'yodaobot',
+  'msnbot',
+  'sosospider',
+  'sosoimagespider',
+  'yahoo! slurp',
+  'sogou web spider',
+  '360spider',
   'facebookexternalhit',
   'twitterbot',
   'rogerbot',
@@ -20,11 +30,14 @@ var crawlerUserAgentsDefault = [
   'showyoubot',
   'outbrain',
   'pinterest',
+  'slackbot',
+  'vkShare',
+  'W3C_Validator',
   'developers.google.com/+/web/snippet'
 ];
 
 // 默认排除的后缀名
-var extensionsToIgnoreDefault = [
+const extensionsToIgnoreDefault = [
   '.js',
   '.css',
   '.xml',
@@ -62,7 +75,11 @@ var extensionsToIgnoreDefault = [
   '.iso',
   '.flv',
   '.m4v',
-  '.torrent'
+  '.torrent',
+  'ttf',
+  'woff',
+  'svg',
+  'eot'
 ];
 
 /*
@@ -73,15 +90,15 @@ var extensionsToIgnoreDefault = [
  * @return {Boolean}
  */
 function shouldPreRender(options) {
-  var extensionsToIgnore = options.extensionsToIgnore;
-  var crawlerUserAgents = options.crawlerUserAgents;
-  var hasExtensionToIgnore = extensionsToIgnore.some(function(extension) {
+  let extensionsToIgnore = options.extensionsToIgnore;
+  let crawlerUserAgents = options.crawlerUserAgents;
+  let hasExtensionToIgnore = extensionsToIgnore.some(function(extension) {
     return options
       .url
       .indexOf(extension) !== -1;
   });
 
-  var isBot = crawlerUserAgents.some(function(crawlerUserAgent) {
+  let isBot = crawlerUserAgents.some(function(crawlerUserAgent) {
     return options
       .userAgent
       .toLowerCase()
@@ -102,7 +119,7 @@ function shouldPreRender(options) {
   }
 
   // do pre-render when:
-  var query = url
+  let query = url
     .parse(options.url, true)
     .query;
 
@@ -129,10 +146,14 @@ module.exports = function preRenderMiddleware(options) {
   options.extensionsToIgnore = options.extensionsToIgnore || extensionsToIgnoreDefault;
   options.crawlerUserAgents = options.crawlerUserAgents || crawlerUserAgentsDefault;
   options.redirectStatusCodes = options.redirectStatusCodes || [301, 302];
+  options.fullpage = typeof options.fullpage == 'undefined' 
+    ? true : options.fullpage;
   // options.username
   // options.password
   // options.protocol
   // options.host
+  // options.fullpage
+  // options.renderType
 
   /*
    * Pre-render
@@ -141,13 +162,14 @@ module.exports = function preRenderMiddleware(options) {
    * @param {Generator} next
    */
   return async function preRender(ctx, next) {
-    var protocol = options.protocol || ctx.protocol;
-    var host = options.host || ctx.host;
-    var headers = {
-      'User-Agent': ctx.get('user-agent')
+    let protocol = options.protocol || ctx.protocol;
+    let host = options.host || ctx.host;
+    let headers = {
+      'User-Agent': ctx.get('user-agent'),
+      'Content-Type': 'application/json',
     };
 
-    var isPreRender = shouldPreRender({
+    let isPreRender = shouldPreRender({
       userAgent: ctx.get('user-agent'),
       bufferAgent: ctx.get('x-bufferbot'),
       method: ctx.method,
@@ -156,14 +178,10 @@ module.exports = function preRenderMiddleware(options) {
       crawlerUserAgents: options.crawlerUserAgents,
     });
 
-    var body = '';
+    let renderUrl;
+    let app = ctx;
 
-    var renderUrl;
-    var preRenderUrl;
-    var result;
-    var app = ctx;
-
-    var requestGet = function(args) {
+    let requestGet = function(args) {
       return new Promise(function(resolve, reject) {
         request(args, function(error, response, result) {
           var statusCode = response.statusCode;
@@ -187,16 +205,20 @@ module.exports = function preRenderMiddleware(options) {
     // Pre-render generate the site and return
     if (isPreRender) {
       renderUrl = protocol + '://' + host + ctx.url;
-      preRenderUrl = options.prerender + renderUrl;
-      // console.log(preRenderUrl)
       await requestGet({
         'auth': {
           'user': options.username,
           'pass': options.password,
           'sendImmediately': true
         },
-        method: 'GET',
-        url: preRenderUrl,
+        method: 'POST',
+        url: options.prerender,
+        body: JSON.stringify({
+          renderType: options.renderType || 'html',
+          fullpage: !!options.fullpage,
+          url: renderUrl,
+          userAgent: 'Prerender (+https://github.com/prerender/prerender)',
+        }),
         headers: headers,
         gzip: true,
         followRedirect: false
